@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SoundSense — Audio Classifier</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #1a1a24;
+    --accent: #7c6dfa;
+    --accent2: #fa6d8f;
+    --accent3: #6dfad4;
+    --text: #f0eeff;
+    --muted: #6b6880;
+    --border: rgba(124,109,250,0.18);
+    --card: rgba(26,26,36,0.85);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,109,250,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,109,250,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glowing orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+    animation: drift 12s ease-in-out infinite alternate;
+  }
+  .orb1 { width: 500px; height: 500px; background: var(--accent); top: -150px; left: -150px; animation-delay: 0s; }
+  .orb2 { width: 400px; height: 400px; background: var(--accent2); bottom: -100px; right: -100px; animation-delay: -4s; }
+  .orb3 { width: 300px; height: 300px; background: var(--accent3); top: 40%; left: 60%; animation-delay: -8s; }
+
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(30px, 20px) scale(1.08); }
+  }
+
+  /* Layout */
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Header */
+  header {
+    padding: 48px 0 0;
+    text-align: center;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .logo-icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-icon svg { width: 24px; height: 24px; }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .tagline {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -2px;
+    margin-bottom: 16px;
+  }
+
+  h1 span {
+    background: linear-gradient(90deg, var(--accent3), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    color: var(--muted);
+    max-width: 500px;
+    margin: 0 auto 48px;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 56px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--card);
+    backdrop-filter: blur(12px);
+    animation: fadeUp 0.8s 0.2s ease both;
+  }
+
+  .stat {
+    flex: 1;
+    padding: 20px 24px;
+    text-align: center;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Upload card */
+  .upload-section {
+    animation: fadeUp 0.8s 0.3s ease both;
+    margin-bottom: 32px;
+  }
+
+  .upload-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px 40px;
+    backdrop-filter: blur(12px);
+    text-align: center;
+    transition: border-color 0.3s;
+  }
+
+  .upload-card.dragover {
+    border-color: var(--accent);
+    background: rgba(124,109,250,0.08);
+  }
+
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 48px 24px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .upload-zone:hover {
+    border-color: var(--accent);
+    background: rgba(124,109,250,0.05);
+  }
+
+  .upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .upload-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, rgba(124,109,250,0.2), rgba(250,109,143,0.2));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+  }
+
+  .upload-icon svg { width: 28px; height: 28px; stroke: var(--accent); }
+
+  .upload-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .upload-hint {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  /* Waveform visualizer */
+  .waveform-container {
+    display: none;
+    margin-bottom: 24px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid var(--border);
+  }
+
+  .waveform-container.show { display: block; }
+
+  #waveform-canvas {
+    width: 100%;
+    height: 60px;
+    display: block;
+  }
+
+  .file-info {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: rgba(124,109,250,0.08);
+    border: 1px solid rgba(124,109,250,0.2);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .file-info.show { display: flex; }
+
+  .file-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .file-icon svg { width: 16px; height: 16px; stroke: white; }
+  .file-name { font-weight: 400; color: var(--text); flex: 1; }
+  .file-size { color: var(--muted); font-size: 11px; }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.2s;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .remove-btn:hover { color: var(--accent2); }
+
+  /* Predict button */
+  .predict-btn {
+    width: 100%;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    letter-spacing: 0.02em;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .predict-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--accent2), var(--accent3));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .predict-btn:hover::before { opacity: 1; }
+  .predict-btn span { position: relative; z-index: 1; }
+
+  .predict-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .predict-btn:disabled::before { opacity: 0; }
+
+  /* Loading state */
+  .loading-bar {
+    display: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 16px;
+    overflow: hidden;
+  }
+
+  .loading-bar.show { display: block; }
+
+  .loading-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    border-radius: 2px;
+    animation: loading 1.5s ease-in-out infinite;
+    width: 40%;
+  }
+
+  @keyframes loading {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  .loading-text {
+    display: none;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .loading-text.show { display: block; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* Results section */
+  .results-section {
+    display: none;
+    animation: fadeUp 0.6s ease both;
+    margin-bottom: 32px;
+  }
+
+  .results-section.show { display: block; }
+
+  .results-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+  }
+
+  .results-header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .results-header-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent3);
+    box-shadow: 0 0 8px var(--accent3);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .results-header-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  /* Top prediction */
+  .top-prediction {
+    padding: 36px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .prediction-badge {
+    width: 72px;
+    height: 72px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+
+  .prediction-info { flex: 1; }
+
+  .prediction-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .prediction-class {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    text-transform: capitalize;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--text), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .confidence-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .confidence-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .confidence-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent3), var(--accent));
+    border-radius: 3px;
+    transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 0%;
+  }
+
+  .confidence-pct {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent3);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* Other predictions */
+  .other-predictions {
+    padding: 24px 32px;
+  }
+
+  .other-title {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 16px;
+  }
+
+  .other-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: all 0.4s ease;
+  }
+
+  .other-item.show {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .other-rank {
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 20px;
+    font-weight: 300;
+  }
+
+  .other-name {
+    font-size: 13px;
+    text-transform: capitalize;
+    flex: 1;
+  }
+
+  .other-bar-bg {
+    width: 120px;
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .other-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    opacity: 0.5;
+    transition: width 0.8s ease;
+    width: 0%;
+  }
+
+  .other-pct {
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 44px;
+    text-align: right;
+    font-weight: 300;
+  }
+
+  /* Try again button */
+  .try-again-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 16px;
+  }
+  .try-again-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Classes section */
+  .classes-section {
+    animation: fadeUp 0.8s 0.5s ease both;
+    margin-bottom: 56px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 16px;
+  }
+
+  .classes-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .class-tag {
+    padding: 6px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--muted);
+    transition: all 0.2s;
+    cursor: default;
+    font-weight: 300;
+  }
+
+  .class-tag:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(124,109,250,0.08);
+  }
+
+  .class-tag.highlighted {
+    border-color: var(--accent3);
+    color: var(--accent3);
+    background: rgba(109,250,212,0.08);
+    box-shadow: 0 0 12px rgba(109,250,212,0.15);
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 300;
+    animation: fadeUp 0.8s 0.6s ease both;
+  }
+
+  footer span { color: var(--accent); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Error state */
+  .error-msg {
+    display: none;
+    padding: 14px 18px;
+    background: rgba(250,109,143,0.08);
+    border: 1px solid rgba(250,109,143,0.25);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--accent2);
+    margin-top: 12px;
+    text-align: center;
+  }
+  .error-msg.show { display: block; }
+
+  /* Emoji map */
+  .sound-emoji {
+    font-size: 28px;
+  }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<div class="container">
+
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"/>
+          <circle cx="6" cy="18" r="3"/>
+          <circle cx="18" cy="16" r="3"/>
+        </svg>
+      </div>
+      <div class="logo-text">SoundSense</div>
+    </div>
+    <p class="tagline">Deep Learning Audio Classification</p>
+    <h1>What does that<br><span>sound</span> like?</h1>
+    <p class="subtitle">Drop any audio file and our CNN model will identify the sound across 50 environmental categories — trained on the ESC-50 dataset.</p>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-num">79%</span>
+      <span class="stat-label">Accuracy</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">50</span>
+      <span class="stat-label">Sound Classes</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">2000+</span>
+      <span class="stat-label">Training Clips</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">CNN</span>
+      <span class="stat-label">Architecture</span>
+    </div>
+  </div>
+
+  <div class="upload-section">
+    <div class="upload-card" id="upload-card">
+
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="file-input" accept=".wav,.mp3,.flac,.m4a,.ogg">
+        <div class="upload-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <div class="upload-title">Drop your audio file here</div>
+        <div class="upload-hint">Supports .wav · .mp3 · .flac · .m4a · .ogg</div>
+      </div>
+
+      <div class="waveform-container" id="waveform-container">
+        <canvas id="waveform-canvas"></canvas>
+      </div>
+
+      <div class="file-info" id="file-info">
+        <div class="file-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18V5l12-2v13"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="18" cy="16" r="3"/>
+          </svg>
+        </div>
+        <div>
+          <div class="file-name" id="file-name-text">filename.wav</div>
+          <div class="file-size" id="file-size-text">0 KB</div>
+        </div>
+        <button class="remove-btn" id="remove-btn" title="Remove file">✕</button>
+      </div>
+
+      <button class="predict-btn" id="predict-btn" disabled>
+        <span>Classify Sound</span>
+      </button>
+
+      <div class="loading-bar" id="loading-bar">
+        <div class="loading-bar-inner"></div>
+      </div>
+      <div class="loading-text" id="loading-text">Analyzing audio patterns...</div>
+      <div class="error-msg" id="error-msg">Could not connect to the server. Make sure app.py is running.</div>
+
+    </div>
+  </div>
+
+  <div class="results-section" id="results-section">
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-header-dot"></div>
+        <div class="results-header-text">Classification Result</div>
+      </div>
+
+      <div class="top-prediction">
+        <div class="prediction-badge" id="prediction-emoji">🔊</div>
+        <div class="prediction-info">
+          <div class="prediction-label">Detected Sound</div>
+          <div class="prediction-class" id="prediction-class">—</div>
+          <div class="confidence-row">
+            <div class="confidence-bar-bg">
+              <div class="confidence-bar-fill" id="confidence-bar"></div>
+            </div>
+            <div class="confidence-pct" id="confidence-pct">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="other-predictions">
+        <div class="other-title">Other possibilities</div>
+        <div class="other-item" id="other-1">
+          <span class="other-rank">2</span>
+          <span class="other-name" id="other-name-1">—</span>
+          <div class="other-bar-bg"><div class="other-bar-fill" id="other-bar-1"></div></div>
+          <span class="other-pct" id="other-pct-1">—</span>
+        </div>
+        <div class="other-item" id="other-2">
+          <span class="other-rank">3</span>
+          <span class="other-name" id="other-name-2">—</span>
+          <div class="other-bar-bg"><div class="other-bar-fill" id="other-bar-2"></div></div>
+          <span class="other-pct" id="other-pct-2">—</span>
+        </div>
+        <div class="other-item" id="other-3">
+          <span class="other-rank">4</span>
+          <span class="other-name" id="other-name-3">—</span>
+          <div class="other-bar-bg"><div class="other-bar-fill" id="other-bar-3"></div></div>
+          <span class="other-pct" id="other-pct-3">—</span>
+        </div>
+      </div>
+    </div>
+    <button class="try-again-btn" id="try-again-btn">+ Try another sound</button>
+  </div>
+
+  <div class="classes-section">
+    <div class="section-label">50 recognizable sound classes</div>
+    <div class="classes-grid" id="classes-grid"></div>
+  </div>
+
+  <footer>
+    Built with <span>TensorFlow</span> · ESC-50 Dataset · CNN Architecture
+  </footer>
+
+</div>
+
+<script>
+const CLASS_NAMES = [
+  'dog','rooster','pig','cow','frog','cat','hen','insects','sheep','crow',
+  'rain','sea waves','crackling fire','crickets','chirping birds',
+  'water drops','wind','pouring water','toilet flush','thunderstorm',
+  'crying baby','sneezing','clapping','breathing','coughing',
+  'footsteps','laughing','brushing teeth','snoring','drinking sipping',
+  'door wood knock','mouse click','keyboard typing','door wood creaks','can opening',
+  'washing machine','vacuum cleaner','clock alarm','clock tick','glass breaking',
+  'helicopter','chainsaw','siren','car horn','engine',
+  'train','church bells','airplane','fireworks','hand saw'
+];
+
+const EMOJI_MAP = {
+  'dog':'🐕','rooster':'🐓','pig':'🐷','cow':'🐄','frog':'🐸',
+  'cat':'🐱','hen':'🐔','insects':'🦟','sheep':'🐑','crow':'🐦',
+  'rain':'🌧','sea waves':'🌊','crackling fire':'🔥','crickets':'🦗','chirping birds':'🐦',
+  'water drops':'💧','wind':'💨','pouring water':'🚿','toilet flush':'🚽','thunderstorm':'⛈',
+  'crying baby':'👶','sneezing':'🤧','clapping':'👏','breathing':'😮‍💨','coughing':'😷',
+  'footsteps':'👣','laughing':'😂','brushing teeth':'🪥','snoring':'😴','drinking sipping':'🥤',
+  'door wood knock':'🚪','mouse click':'🖱','keyboard typing':'⌨','door wood creaks':'🚪','can opening':'🥫',
+  'washing machine':'🫧','vacuum cleaner':'🧹','clock alarm':'⏰','clock tick':'🕐','glass breaking':'🥃',
+  'helicopter':'🚁','chainsaw':'🪚','siren':'🚨','car horn':'📯','engine':'⚙',
+  'train':'🚂','church bells':'🔔','airplane':'✈','fireworks':'🎆','hand saw':'🪚'
+};
+
+// Build classes grid
+const grid = document.getElementById('classes-grid');
+CLASS_NAMES.forEach(name => {
+  const tag = document.createElement('div');
+  tag.className = 'class-tag';
+  tag.textContent = name;
+  tag.id = 'tag-' + name.replace(/\s/g, '_');
+  grid.appendChild(tag);
+});
+
+// File handling
+let selectedFile = null;
+const fileInput = document.getElementById('file-input');
+const predictBtn = document.getElementById('predict-btn');
+const fileInfo = document.getElementById('file-info');
+const fileNameText = document.getElementById('file-name-text');
+const fileSizeText = document.getElementById('file-size-text');
+const removeBtn = document.getElementById('remove-btn');
+const uploadCard = document.getElementById('upload-card');
+const waveformContainer = document.getElementById('waveform-container');
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+// Drag and drop
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadCard.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => uploadCard.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadCard.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  selectedFile = file;
+  fileNameText.textContent = file.name;
+  fileSizeText.textContent = (file.size / 1024).toFixed(1) + ' KB';
+  fileInfo.classList.add('show');
+  predictBtn.disabled = false;
+  document.getElementById('error-msg').classList.remove('show');
+  drawWaveform(file);
+}
+
+function drawWaveform(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.decodeAudioData(e.target.result, buffer => {
+      const data = buffer.getChannelData(0);
+      const canvas = document.getElementById('waveform-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.height = 60 * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const W = canvas.offsetWidth, H = 60;
+      ctx.clearRect(0, 0, W, H);
+
+      const step = Math.floor(data.length / W);
+      const amp = H / 2;
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#7c6dfa';
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i < W; i++) {
+        let min = 1, max = -1;
+        for (let j = 0; j < step; j++) {
+          const d = data[i * step + j] || 0;
+          if (d < min) min = d;
+          if (d > max) max = d;
+        }
+        const yLow = (1 + min) * amp;
+        const yHigh = (1 + max) * amp;
+        ctx.moveTo(i, yLow);
+        ctx.lineTo(i, yHigh);
+      }
+      ctx.stroke();
+      waveformContainer.classList.add('show');
+    }).catch(() => waveformContainer.classList.remove('show'));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+removeBtn.addEventListener('click', () => {
+  selectedFile = null;
+  fileInput.value = '';
+  fileInfo.classList.remove('show');
+  predictBtn.disabled = true;
+  waveformContainer.classList.remove('show');
+  document.getElementById('results-section').classList.remove('show');
+});
+
+document.getElementById('try-again-btn').addEventListener('click', () => {
+  selectedFile = null;
+  fileInput.value = '';
+  fileInfo.classList.remove('show');
+  predictBtn.disabled = true;
+  waveformContainer.classList.remove('show');
+  document.getElementById('results-section').classList.remove('show');
+  document.querySelectorAll('.class-tag').forEach(t => t.classList.remove('highlighted'));
+});
+
+// Predict
+predictBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+
+  predictBtn.disabled = true;
+  document.getElementById('loading-bar').classList.add('show');
+  document.getElementById('loading-text').classList.add('show');
+  document.getElementById('error-msg').classList.remove('show');
+  document.getElementById('results-section').classList.remove('show');
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+
+  try {
+    const res = await fetch('http://127.0.0.1:5000/predict', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) throw new Error('Server error');
+    const data = await res.json();
+    showResults(data);
+
+  } catch (err) {
+    document.getElementById('error-msg').classList.add('show');
+    predictBtn.disabled = false;
+  } finally {
+    document.getElementById('loading-bar').classList.remove('show');
+    document.getElementById('loading-text').classList.remove('show');
+  }
+});
+
+function showResults(data) {
+  const top = data.predictions[0];
+  const topName = top.class.replace(/_/g, ' ');
+
+  document.getElementById('prediction-class').textContent = topName;
+  document.getElementById('prediction-emoji').textContent = EMOJI_MAP[topName] || '🔊';
+  document.getElementById('confidence-pct').textContent = top.confidence.toFixed(1) + '%';
+
+  setTimeout(() => {
+    document.getElementById('confidence-bar').style.width = top.confidence + '%';
+  }, 100);
+
+  const others = data.predictions.slice(1, 4);
+  others.forEach((p, i) => {
+    const name = p.class.replace(/_/g, ' ');
+    document.getElementById(`other-name-${i+1}`).textContent = name;
+    document.getElementById(`other-pct-${i+1}`).textContent = p.confidence.toFixed(1) + '%';
+    setTimeout(() => {
+      document.getElementById(`other-bar-${i+1}`).style.width = (p.confidence / top.confidence * 100) + '%';
+      document.getElementById(`other-${i+1}`).classList.add('show');
+    }, 300 + i * 120);
+  });
+
+  // Highlight class tag
+  document.querySelectorAll('.class-tag').forEach(t => t.classList.remove('highlighted'));
+  const tagId = 'tag-' + topName.replace(/\s/g, '_');
+  const tag = document.getElementById(tagId);
+  if (tag) {
+    tag.classList.add('highlighted');
+    tag.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  document.getElementById('results-section').classList.add('show');
+  predictBtn.disabled = false;
+}
+</script>
+</body>
+</html>
