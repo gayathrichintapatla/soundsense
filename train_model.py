@@ -23,19 +23,34 @@ print(f"Train: {X_train.shape[0]} | Val: {X_val.shape[0]} | Test: {X_test.shape[
 
 def augment(spec):
     spec = spec.copy()
+
+    # Time shift
     shift = np.random.randint(-30, 30)
     spec = np.roll(spec, shift, axis=1)
+
+    # Multiple frequency masks (SpecAugment style)
     for _ in range(np.random.randint(1, 3)):
         f_start = np.random.randint(0, 100)
-        spec[f_start:f_start+np.random.randint(5,25), :, :] = 0
+        f_width = np.random.randint(5, 25)
+        spec[f_start:f_start+f_width, :, :] = 0
+
+    # Multiple time masks
     for _ in range(np.random.randint(1, 3)):
         t_start = np.random.randint(0, 180)
-        spec[:, t_start:t_start+np.random.randint(5,40), :] = 0
-    spec = spec * np.random.uniform(0.7, 1.3)
-    spec = spec + np.random.normal(0, 0.02, spec.shape)
-    return np.clip(spec, 0, 1)
+        t_width = np.random.randint(5, 40)
+        spec[:, t_start:t_start+t_width, :] = 0
 
-print("\nAugmenting training data...")
+    # Random gain (volume change)
+    gain = np.random.uniform(0.7, 1.3)
+    spec = spec * gain
+
+    # Gaussian noise
+    spec = spec + np.random.normal(0, 0.02, spec.shape)
+    spec = np.clip(spec, 0, 1)
+
+    return spec
+
+# Triple augmentation instead of double
 X_aug1 = np.array([augment(x.copy()) for x in X_train])
 X_aug2 = np.array([augment(x.copy()) for x in X_train])
 X_train_full = np.concatenate([X_train, X_aug1, X_aug2], axis=0)
@@ -48,26 +63,48 @@ print(f"Training set after augmentation: {X_train_full.shape[0]} clips")
 
 model = keras.Sequential([
     keras.layers.Input(shape=X_train.shape[1:]),
+
+    # Block 1
+    keras.layers.Conv2D(32, (3,3), activation='relu', padding='same'),
     keras.layers.Conv2D(32, (3,3), activation='relu', padding='same'),
     keras.layers.BatchNormalization(),
     keras.layers.MaxPooling2D((2,2)),
     keras.layers.Dropout(0.2),
+
+    # Block 2
+    keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
     keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
     keras.layers.BatchNormalization(),
     keras.layers.MaxPooling2D((2,2)),
     keras.layers.Dropout(0.25),
+
+    # Block 3
+    keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
     keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
     keras.layers.BatchNormalization(),
     keras.layers.MaxPooling2D((2,2)),
     keras.layers.Dropout(0.3),
+
+    # Block 4
+    keras.layers.Conv2D(256, (3,3), activation='relu', padding='same'),
+    keras.layers.BatchNormalization(),
+    keras.layers.MaxPooling2D((2,2)),
+    keras.layers.Dropout(0.3),
+
     keras.layers.GlobalAveragePooling2D(),
+
+    keras.layers.Dense(512, activation='relu'),
+    keras.layers.BatchNormalization(),
+    keras.layers.Dropout(0.5),
+
     keras.layers.Dense(256, activation='relu'),
     keras.layers.Dropout(0.4),
+
     keras.layers.Dense(50, activation='softmax')
 ])
 
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=0.001),
+    optimizer=keras.optimizers.Adam(learning_rate=0.0008),
     loss='sparse_categorical_crossentropy',
     metrics=['accuracy']
 )
