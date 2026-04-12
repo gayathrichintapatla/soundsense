@@ -1,0 +1,11 @@
+ESC-50/
+venv/
+processed_data/
+features/
+my_recordings/
+__pycache__/
+*.pyc
+*.png
+*.gif
+*.xlsx
+yamnet_cache/
