@@ -50,6 +50,35 @@ def augment(spec):
 
     return spec
 
+def mixup(X, y, alpha=0.3):
+    indices = np.random.permutation(len(X))
+    X2 = X[indices]
+    y2 = y[indices]
+
+    lam = np.random.beta(alpha, alpha, len(X))
+    lam = np.maximum(lam, 1 - lam)  # always > 0.5
+
+    X_mixed = np.array([
+        lam[i] * X[i] + (1 - lam[i]) * X2[i]
+        for i in range(len(X))
+    ])
+
+    return X_mixed, y, y2, lam
+
+# Generate mixup samples from the worst class pairs
+worst_indices = [15, 16, 20, 6, 19, 41, 44, 4, 1, 11]
+# water_drops, wind, crying_baby, hen, thunderstorm,
+# chainsaw, engine, frog, rooster, sea_waves
+
+mask = np.isin(y_train, worst_indices)
+X_worst = X_train[mask]
+y_worst = y_train[mask]
+
+if len(X_worst) > 0:
+    X_mix, _, _, _ = mixup(X_worst, y_worst)
+    X_train_full = np.concatenate([X_train_full, X_mix], axis=0)
+    y_train_full = np.concatenate([y_train_full, y_worst], axis=0)
+    print(f"Added {len(X_mix)} mixup samples for worst classes")
 # Triple augmentation instead of double
 X_aug1 = np.array([augment(x.copy()) for x in X_train])
 X_aug2 = np.array([augment(x.copy()) for x in X_train])
@@ -111,18 +140,61 @@ model.compile(
 model.summary()
 
 print("\nTraining...")
+# Give higher weight to poorly performing classes
+class_weight = {}
+for i in range(50):
+    class_weight[i] = 1.0  # default weight for all classes
+
+# Boost the worst performing classes
+worst_classes = {
+    'water_drops': 0,  # will be filled below
+    'wind': 0,
+    'crying_baby': 0,
+    'hen': 0,
+    'thunderstorm': 0,
+    'chainsaw': 0,
+    'engine': 0,
+    'frog': 0,
+    'rooster': 0,
+    'sea_waves': 0,
+}
+
+CLASS_NAMES = [
+    'dog','rooster','pig','cow','frog','cat','hen','insects','sheep','crow',
+    'rain','sea_waves','crackling_fire','crickets','chirping_birds',
+    'water_drops','wind','pouring_water','toilet_flush','thunderstorm',
+    'crying_baby','sneezing','clapping','breathing','coughing',
+    'footsteps','laughing','brushing_teeth','snoring','drinking_sipping',
+    'door_wood_knock','mouse_click','keyboard_typing','door_wood_creaks','can_opening',
+    'washing_machine','vacuum_cleaner','clock_alarm','clock_tick','glass_breaking',
+    'helicopter','chainsaw','siren','car_horn','engine',
+    'train','church_bells','airplane','fireworks','hand_saw'
+]
+
+# Assign higher weight to worst classes
+for class_name in worst_classes:
+    idx = CLASS_NAMES.index(class_name)
+    class_weight[idx] = 2.5  # model tries 2.5x harder on these
+
+print("Class weights set — boosting 10 worst performing classes")
 history = model.fit(
     X_train_full, y_train_full,
     validation_data=(X_val, y_val),
     epochs=60,
     batch_size=32,
+    class_weight=class_weight,   # ADD THIS LINE
     callbacks=[
         keras.callbacks.EarlyStopping(
-            monitor='val_accuracy', patience=15,
-            restore_best_weights=True),
+            monitor='val_accuracy',
+            patience=15,
+            restore_best_weights=True
+        ),
         keras.callbacks.ReduceLROnPlateau(
-            monitor='val_loss', factor=0.5,
-            patience=7, min_lr=0.000001)
+            monitor='val_loss',
+            factor=0.5,
+            patience=7,
+            min_lr=0.000001
+        )
     ]
 )
 
