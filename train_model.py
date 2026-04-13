@@ -73,8 +73,9 @@ def mixup(X, y, alpha=0.3):
 print("\nAugmenting training data...")
 X_aug1 = np.array([augment(x.copy()) for x in X_train])
 X_aug2 = np.array([augment(x.copy()) for x in X_train])
-X_train_full = np.concatenate([X_train, X_aug1, X_aug2], axis=0)
-y_train_full = np.concatenate([y_train, y_train, y_train], axis=0)
+X_aug3 = np.array([augment(x.copy()) for x in X_train])
+X_train_full = np.concatenate([X_train, X_aug1, X_aug2, X_aug3], axis=0)
+y_train_full = np.concatenate([y_train, y_train, y_train, y_train], axis=0)
 
 # Step 2 — Mixup on worst classes
 worst_indices = [29, 2, 35, 41, 16, 11, 13, 21, 33, 36]
@@ -174,13 +175,13 @@ history = model.fit(
     callbacks=[
         keras.callbacks.EarlyStopping(
             monitor='val_accuracy',
-            patience=15,
+            patience=20,
             restore_best_weights=True
         ),
         keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.5,
-            patience=7,
+            factor=0.3,
+            patience=5,
             min_lr=0.000001
         )
     ]
